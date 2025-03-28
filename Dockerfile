@@ -1,4 +1,4 @@
-FROM frrouting/frr:v8.4.1 as base
+FROM quay.io/frrouting/frr:8.5.7 as base
 RUN echo -e '\
 export ASN_METALLB_LOCAL=4200099998 \n\
 export ASN_METALLB_REMOTE=4200099999 \n\
