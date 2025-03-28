@@ -1,6 +1,7 @@
 router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
  bgp router-id {{ NODE_IP }}
  no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
  neighbor METALLB peer-group
  neighbor METALLB remote-as {{ ASN_METALLB_REMOTE }}
  neighbor METALLB passive
@@ -8,6 +9,7 @@ router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
  address-family ipv4 unicast
 {% if neighbours.ipv4 is defined %}
   neighbor {{ PEER_IP_REMOTE }} peer-group METALLB
+  neighbor {{ PEER_IP_REMOTE }} activate
 {% endif %}
   neighbor METALLB route-map denymap out
  exit-address-family
@@ -15,6 +17,7 @@ router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
  address-family ipv6 unicast
 {% if neighbours.ipv6 is defined %}
   neighbor {{ PEER_IPV6_REMOTE }} peer-group METALLB
+  neighbor {{ PEER_IPV6_REMOTE }} activate
 {% endif %}
   neighbor METALLB route-map denymap_v6 out
  exit-address-family
@@ -23,6 +26,7 @@ router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
 router bgp {{ ASN_LOCAL }}
  bgp router-id {{ NODE_IP }}
  no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
  bgp bestpath as-path multipath-relax
  neighbor FABRIC peer-group
  neighbor FABRIC remote-as 48579
@@ -38,6 +42,7 @@ router bgp {{ ASN_LOCAL }}
 {% if neighbours.ipv4 is defined %}
 {% for n in neighbours.ipv4 %}
   neighbor {{ n }} peer-group FABRIC
+  neighbor {{ n }} activate
 {% endfor %}
 {% endif %}
   redistribute connected route-map loopbacks
@@ -45,9 +50,10 @@ router bgp {{ ASN_LOCAL }}
  exit-address-family
  !
  address-family ipv6 unicast
-{% if neighbours.ipv4 is defined %}
+{% if neighbours.ipv6 is defined %}
 {% for n in neighbours.ipv6 %}
   neighbor {{ n }} peer-group FABRIC
+  neighbor {{ n }} activate
 {% endfor %}
 {% endif %}
   redistribute connected route-map loopbacks
