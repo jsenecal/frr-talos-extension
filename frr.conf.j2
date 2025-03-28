@@ -1,48 +1,74 @@
-{%- for n in ports %}
-interface {{n}}
- ipv6 nd ra-interval 10
- no ipv6 nd suppress-ra
-!
-{%- endfor %}
-
-router bgp {{ASN_METALLB_LOCAL}} vrf {{NAMESPACE_METALLB}}
- bgp router-id {{NODE_IP}}
+router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
+ bgp router-id {{ NODE_IP }}
  no bgp ebgp-requires-policy
  neighbor METALLB peer-group
- neighbor METALLB remote-as {{ASN_METALLB_REMOTE}}
+ neighbor METALLB remote-as {{ ASN_METALLB_REMOTE }}
  neighbor METALLB passive
- neighbor {{PEER_IP_REMOTE}} peer-group METALLB
  !
  address-family ipv4 unicast
+{% if neighbours.ipv4 is defined %}
+  neighbor {{ PEER_IP_REMOTE }} peer-group METALLB
+{% endif %}
   neighbor METALLB route-map denymap out
+ exit-address-family
+ !
+ address-family ipv6 unicast
+{% if neighbours.ipv6 is defined %}
+  neighbor {{ PEER_IPV6_REMOTE }} peer-group METALLB
+{% endif %}
+  neighbor METALLB route-map denymap_v6 out
  exit-address-family
 !
 
-router bgp {{ASN_LOCAL}}
- bgp router-id {{NODE_IP}}
+router bgp {{ ASN_LOCAL }}
+ bgp router-id {{ NODE_IP }}
  no bgp ebgp-requires-policy
  bgp bestpath as-path multipath-relax
  neighbor FABRIC peer-group
- neighbor FABRIC remote-as external
- neighbor FABRIC bfd
+ neighbor FABRIC remote-as 48579
  neighbor FABRIC timers 1 3
-
- {%- for n in ports %}
- neighbor {{n}} interface{% if PEER_V6ONLY|lower == "yes" %} v6only{% endif %} peer-group FABRIC
- {%- endfor %}
+ {% if not "no" in NEIGHBOR_PASSWORD %}
+ neighbor FABRIC password {{ NEIGHBOR_PASSWORD }}
+ {% endif %}
+ !
+ !
+ !
  !
  address-family ipv4 unicast
+{% if neighbours.ipv4 is defined %}
+{% for n in neighbours.ipv4 %}
+  neighbor {{ n }} peer-group FABRIC
+{% endfor %}
+{% endif %}
   redistribute connected route-map loopbacks
-  import vrf {{NAMESPACE_METALLB}}
+  import vrf {{ NAMESPACE_METALLB }}
+ exit-address-family
+ !
+ address-family ipv6 unicast
+{% if neighbours.ipv4 is defined %}
+{% for n in neighbours.ipv6 %}
+  neighbor {{ n }} peer-group FABRIC
+{% endfor %}
+{% endif %}
+  redistribute connected route-map loopbacks
+  import vrf {{ NAMESPACE_METALLB }}
  exit-address-family
 !
 ip prefix-list denyall seq 10 deny 0.0.0.0/0
 !
+ipv6 prefix-list denyall_v6 seq 10 deny ::/0
+!
 route-map denymap permit 1
  match ip address prefix-list denyall
 !
+route-map denymap_v6 permit 1
+ match ipv6 address prefix-list denyall_v6
+!
 route-map SETSRC permit 10
- set src {{NODE_IP}}
+ set src {{ NODE_IP }}
+!
+route-map SETSRC_V6 permit 10
+ set src {{ NODE_IPV6 }}
 !
 route-map loopbacks permit 10
   match interface lo
@@ -54,6 +80,7 @@ route-map loopbacks permit 30
   match interface dummy1
 !
 ip protocol bgp route-map SETSRC
+ipv6 protocol bgp route-map SETSRC_V6
 !
 line vty
 !
