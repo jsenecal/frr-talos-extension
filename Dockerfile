@@ -1,8 +1,8 @@
 FROM quay.io/frrouting/frr:10.4.1 as base
 
 # Install dependencies
-RUN apk add --no-cache --update-cache gettext py3-pip iputils busybox-extras jq python3 py3-yaml
-RUN pip3 install j2cli pyyaml
+RUN apk add --no-cache --update-cache gettext py3-pip iputils busybox-extras jq python3 py3-yaml py3-jinja2
+RUN pip3 install --break-system-packages j2cli
 
 # Copy configuration loader
 COPY config_loader.py /usr/local/bin/config_loader.py
