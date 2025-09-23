@@ -50,6 +50,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=semver,pattern={{version}}-10.4.1
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
