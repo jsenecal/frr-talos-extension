@@ -1,4 +1,4 @@
-FROM quay.io/frrouting/frr:8.5.7 as base
+FROM quay.io/frrouting/frr:10.4.1 as base
 
 # Install dependencies
 RUN apk add --no-cache --update-cache gettext py3-pip iputils busybox-extras jq python3 py3-yaml
