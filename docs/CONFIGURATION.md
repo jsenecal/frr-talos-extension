@@ -1,6 +1,6 @@
-# Configuration Guide: Config Files Only
+# Configuration Guide
 
-This FRR extension uses a **configuration file only** approach - no environment variables are used for configuration.
+This FRR extension uses a configuration file approach with all settings defined in YAML files mounted via ExtensionServiceConfig.
 
 ## Configuration Structure
 
@@ -182,26 +182,11 @@ cat /etc/frr/frr.conf
 vtysh -c "show running-config"
 ```
 
-## Migration from Environment Variables
+## Key Benefits
 
-If you're migrating from the old environment variable approach:
-
-1. Take all your environment variable values
-2. Put them in the appropriate places in the YAML configuration
-3. Remove all environment variables from machine.env
-4. Mount the config file via ExtensionServiceConfig
-
-Example migration:
-- `ASN_LOCAL=4200001001` → `bgp.upstream.local_asn: 4200001001`
-- `NODE_IP=10.10.10.10` → `bgp.upstream.router_id: 10.10.10.10`
-- `NEIGHBOR_PASSWORD=secret` → `peers[].password: "secret"`
-
-## Benefits of Config File Only Approach
-
-1. **Single source of truth** - All configuration in one file
-2. **Type safety** - YAML structure prevents typos
-3. **Better documentation** - Self-documenting structure
-4. **Version control friendly** - Easy to diff and review
-5. **No variable substitution** - What you see is what you get
-6. **Multiple peers** - Easy to configure many peers with different settings
-7. **Cleaner machine config** - No environment variable pollution
+- **Single source of truth**: All configuration in one file
+- **Type safety**: YAML structure prevents configuration errors
+- **Self-documenting**: Clear structure and field names
+- **Version control friendly**: Easy to diff and review changes
+- **Multiple peers**: Configure many peers with different settings
+- **Clean machine config**: Simple ExtensionServiceConfig approach

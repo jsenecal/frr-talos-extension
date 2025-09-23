@@ -1,24 +1,42 @@
-# FRR Talos System Extension - Zero Environment Variables!
+# FRR Talos System Extension
 
-BGP routing for Talos Linux with Cilium integration, multi-peer support, and BFD - all configured via ExtensionServiceConfig
+BGP routing for Talos Linux with Cilium integration, multi-peer support, and BFD configuration.
 
-***
+## Overview
 
-## Key Innovation: No Environment Variables Required!
+This FRR extension provides BGP routing capabilities for Talos Linux nodes, integrating with Cilium BGP Control Plane for LoadBalancer service management. All configuration is managed through ExtensionServiceConfig files without environment variables.
 
-This FRR extension eliminates the need for environment variables. All configuration - including node-specific settings - is defined directly in the ExtensionServiceConfig.
+## Features
 
-### Before (Old Way - Many Environment Variables)
-```yaml
-machine:
-  env:
-    ASN_LOCAL: 4200001001
-    NODE_IP: 10.10.10.10
-    NEIGHBOR_PASSWORD: secret
-    # ... many more ...
+- **Configuration via ExtensionServiceConfig**: All settings in YAML configuration files
+- **Multiple BGP Peers**: Configure unlimited peers with individual settings
+- **Per-Peer Configuration**: Different passwords, timers, BFD profiles per peer
+- **BGP Routing**: Full BGP support with FRR 10.4.1
+- **Cilium Integration**: Replaces MetalLB for LoadBalancer services
+- **BFD Support**: Fast failure detection with configurable profiles
+- **Dual Stack**: IPv4 and IPv6 support with per-peer address families
+
+## Quick Start
+
+### Build
+
+```bash
+docker build -t frr-talos-extension .
 ```
 
-### After (New Way - Zero Environment Variables)
+### Deploy
+
+1. Install the extension in your Talos configuration:
+
+```yaml
+machine:
+  install:
+    extensions:
+      - image: ghcr.io/elastx/frr-talos-extension:latest
+```
+
+2. Configure via ExtensionServiceConfig:
+
 ```yaml
 apiVersion: v1alpha1
 kind: ExtensionServiceConfig
@@ -27,73 +45,23 @@ configFiles:
   - content: |
       bgp:
         upstream:
-          local_asn: 4200001001     # Defined here, not in env!
-          router_id: 10.10.10.10    # Defined here, not in env!
+          local_asn: 4200001001
+          router_id: 10.10.10.10
           peers:
             - address: 10.0.0.1
               remote_asn: 48579
-              password: "secret1"   # Per-peer passwords!
+              password: "secret"
               bfd:
+                enabled: true
                 profile: normal
-            - address: 10.0.0.2
-              remote_asn: 48579
-              password: "secret2"
-              bfd:
-                profile: aggressive
     mountPath: /etc/frr/config.yaml
-
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml  # Optional, defaults to this path
 ```
 
-Build the image locally
+## Configuration
 
-```
-docker build -t frr-talos-extension .
-```
+### BGP Peers
 
-## Features
-
-- **✨ Zero Environment Variables**: All configuration in ExtensionServiceConfig
-- **🔄 Multiple BGP Peers**: Configure unlimited peers with individual settings
-- **🔑 Per-Peer Configuration**: Different passwords, timers, BFD profiles per peer
-- **🚀 BGP Routing**: Full BGP support with FRR 8.5.7
-- **🌐 Cilium Integration**: Replaces MetalLB for LoadBalancer services
-- **⚡ BFD Support**: Fast failure detection with per-peer profiles
-- **🔢 IPv4/IPv6**: Dual-stack support with per-peer address families
-
-## Cilium Integration
-
-This extension now integrates with Cilium BGP Control Plane instead of MetalLB:
-
-1. **Install Cilium with BGP enabled**:
-   ```bash
-   helm install cilium cilium/cilium -f cilium-values.yaml
-   ```
-
-2. **Apply BGP configuration**:
-   ```bash
-   kubectl apply -f cilium-bgp-config.yaml
-   ```
-
-3. **Label nodes for BGP**:
-   ```bash
-   kubectl label node <node-name> bgp=enabled
-   ```
-
-## Network Architecture
-
-- FRR container creates a veth pair (`veth-frr` and `veth-cilium`)
-- `veth-cilium` is placed in the `cilium` Linux network namespace
-- Cilium agent on the host accesses this veth interface for BGP peering
-- Cilium BGP Control Plane peers with FRR over this veth pair
-- FRR imports routes from Cilium and advertises them to upstream routers
-
-## Image Availability
-
-## Multiple Peer Support
-
-Configure each peer individually with its own settings:
+Configure multiple peers with individual settings:
 
 ```yaml
 peers:
@@ -103,7 +71,7 @@ peers:
     password: "uniquePassword1"
     bfd:
       enabled: true
-      profile: aggressive  # Fast detection for primary
+      profile: aggressive
 
   - address: 10.0.0.2
     remote_asn: 48579
@@ -111,53 +79,68 @@ peers:
     password: "uniquePassword2"
     bfd:
       enabled: true
-      profile: normal     # Standard detection for secondary
+      profile: normal
 
   - address: 10.0.0.3
-    remote_asn: 64512     # Different ASN
+    remote_asn: 64512
     description: "Backup Router"
     password: "backupPassword"
-    multihop: 2           # Multi-hop BGP
+    multihop: 2
     bfd:
       enabled: true
-      profile: relaxed    # Relaxed for backup
+      profile: relaxed
 ```
 
-## BFD Configuration
+### BFD Profiles
 
-BFD profiles are now per-peer configurable:
-- `aggressive`: 300ms detection (primary links)
-- `normal`: 900ms detection (standard links)
-- `relaxed`: 5s detection (backup/WAN links)
+Three predefined BFD profiles for different network scenarios:
 
-Monitor: `vtysh -c "show bfd peers"`
+- **aggressive**: 300ms detection (local/primary links)
+- **normal**: 900ms detection (data center fabric)
+- **relaxed**: 5s detection (backup/WAN links)
 
-See [docs/BFD-CONFIGURATION.md](docs/BFD-CONFIGURATION.md) for detailed configuration.
+Monitor BFD status: `vtysh -c "show bfd peers"`
 
-## Image Availability
+## Cilium Integration
 
-Image is available at `ghcr.io/elastx/frr-talos-extension`
-
-## Project Structure
-
-```
-├── Dockerfile              # Main container build file with BFD support
-├── docker-start            # Container startup script
-├── frr.conf.j2             # Standard FRR config template
-├── frr-bfd.conf.j2         # FRR config template with BFD
-├── config_loader.py        # Configuration management script
-├── docs/                   # Documentation
-│   ├── BFD-CONFIGURATION.md
-│   ├── CONFIGURATION.md
-│   ├── DEPLOYMENT.md
-│   └── TALOS-INTEGRATION.md
-└── examples/               # Example configurations
-    ├── config.yaml
-    ├── config-bfd.yaml
-    ├── cilium-bgp-config.yaml
-    ├── cilium-values.yaml
-    └── extension-service-config*.yaml
+1. Install Cilium with BGP enabled:
+```bash
+helm install cilium cilium/cilium -f examples/cilium-values.yaml
 ```
 
+2. Apply BGP configuration:
+```bash
+kubectl apply -f examples/cilium-bgp-config.yaml
+```
 
+3. Label nodes for BGP:
+```bash
+kubectl label node <node-name> bgp=enabled
+```
 
+## Network Architecture
+
+- FRR creates a veth pair (`veth-frr` and `veth-cilium`)
+- `veth-cilium` is placed in the `cilium` Linux network namespace
+- Cilium BGP Control Plane peers with FRR over this veth pair
+- FRR imports routes from Cilium and advertises them to upstream routers
+
+## Documentation
+
+- [BFD Configuration](docs/BFD-CONFIGURATION.md) - Detailed BFD setup and profiles
+- [Configuration Guide](docs/CONFIGURATION.md) - Complete configuration reference
+- [Deployment Guide](docs/DEPLOYMENT.md) - Step-by-step deployment instructions
+- [Talos Integration](docs/TALOS-INTEGRATION.md) - ExtensionServiceConfig details
+
+## Examples
+
+See the `examples/` directory for complete configuration examples:
+- `config.yaml` - Basic configuration
+- `config-bfd.yaml` - Configuration with BFD
+- `extension-service-config.yaml` - Talos ExtensionServiceConfig
+- `cilium-bgp-config.yaml` - Cilium BGP CRDs
+- `cilium-values.yaml` - Cilium Helm values
+
+## Image
+
+Pre-built images are available at `ghcr.io/elastx/frr-talos-extension`
