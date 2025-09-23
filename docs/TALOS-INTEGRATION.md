@@ -47,7 +47,7 @@ Starting with Talos v1.5.0, extension services can be configured using `Extensio
 machine:
   install:
     extensions:
-      - image: ghcr.io/elastx/frr-talos-extension:latest
+      - image: ghcr.io/jsenecal/frr-talos-extension:latest
 
 ---
 # ExtensionServiceConfig contains ALL configuration

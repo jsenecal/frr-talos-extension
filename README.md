@@ -32,7 +32,7 @@ docker build -t frr-talos-extension .
 machine:
   install:
     extensions:
-      - image: ghcr.io/elastx/frr-talos-extension:latest
+      - image: ghcr.io/jsenecal/frr-talos-extension:latest
 ```
 
 2. Configure via ExtensionServiceConfig:
@@ -143,4 +143,4 @@ See the `examples/` directory for complete configuration examples:
 
 ## Image
 
-Pre-built images are available at `ghcr.io/elastx/frr-talos-extension`
+Pre-built images are available at `ghcr.io/jsenecal/frr-talos-extension`

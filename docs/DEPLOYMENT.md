@@ -17,7 +17,7 @@ machine:
   # Install the FRR system extension
   install:
     extensions:
-      - image: ghcr.io/elastx/frr-talos-extension:latest
+      - image: ghcr.io/jsenecal/frr-talos-extension:latest
 
 ---
 # All configuration in ExtensionServiceConfig
