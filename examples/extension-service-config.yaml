@@ -1,0 +1,122 @@
+# ExtensionServiceConfig for FRR-Cilium BGP Integration
+# Complete configuration without any environment variables
+---
+apiVersion: v1alpha1
+kind: ExtensionServiceConfig
+name: frr
+configFiles:
+  # Complete FRR configuration
+  - content: |
+      bgp:
+        cilium:
+          local_asn: 4200099998
+          remote_asn: 4200099999
+          namespace: cilium
+          peering:
+            ipv4:
+              local: 192.168.250.254
+              remote: 192.168.250.255
+              prefix: 31
+            ipv6:
+              local: "fdae:6bef:5e65::1"
+              remote: "fdae:6bef:5e65::2"
+              prefix: 126
+
+        upstream:
+          local_asn: 4200001001
+          router_id: 10.10.10.10
+          router_id_v6: "2001:db8::1"
+
+          # Multiple peer configuration
+          peers:
+            # First fabric peer
+            - address: 10.0.0.1
+              remote_asn: 48579
+              description: "Leaf switch 1"
+              password: "peer1secret"
+              timers:
+                keepalive: 1
+                hold: 3
+              bfd:
+                enabled: true
+                profile: normal
+
+            # Second fabric peer
+            - address: 10.0.0.2
+              remote_asn: 48579
+              description: "Leaf switch 2"
+              password: "peer2secret"
+              timers:
+                keepalive: 1
+                hold: 3
+              bfd:
+                enabled: true
+                profile: normal
+
+            # IPv6 peers
+            - address: "2001:db8:ffff::1"
+              remote_asn: 48579
+              description: "Leaf switch 1 IPv6"
+              password: "peer1secret"
+              address_family: ipv6
+              bfd:
+                enabled: true
+                profile: normal
+
+            - address: "2001:db8:ffff::2"
+              remote_asn: 48579
+              description: "Leaf switch 2 IPv6"
+              password: "peer2secret"
+              address_family: ipv6
+              bfd:
+                enabled: true
+                profile: normal
+
+      # BFD profiles
+      bfd:
+        profiles:
+          aggressive:
+            detect_multiplier: 3
+            receive_interval: 100
+            transmit_interval: 100
+          normal:
+            detect_multiplier: 3
+            receive_interval: 300
+            transmit_interval: 300
+          relaxed:
+            detect_multiplier: 5
+            receive_interval: 1000
+            transmit_interval: 1000
+
+        cilium_peering:
+          enabled: true
+          profile: aggressive
+
+      network:
+        interface_mtu: 1500
+        veth_names:
+          frr_side: veth-frr
+          cilium_side: veth-cilium
+    mountPath: /etc/frr/config.yaml
+
+  # FRR daemons configuration
+  - content: |
+      zebra=true
+      zebra_options="-n -A 127.0.0.1"
+      bgpd=true
+      bgpd_options="-A 127.0.0.1"
+      staticd=true
+      staticd_options="-A 127.0.0.1"
+      bfdd=true
+      bfdd_options="-A 127.0.0.1"
+    mountPath: /etc/frr/daemons
+
+  # VTY shell configuration
+  - content: |
+      service integrated-vtysh-config
+      hostname frr
+    mountPath: /etc/frr/vtysh.conf
+
+# Only one optional environment variable to specify config location
+environment:
+  - FRR_CONFIG_FILE=/etc/frr/config.yaml

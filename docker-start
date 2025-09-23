@@ -6,86 +6,152 @@ log() {
     echo -e "[$(date +%Y-%m-%d-%H:%M:%S)][frr] $*" >&2
 }
 
-source /etc/frr/env.sh
+# Load configuration from files only
+log "Loading configuration from files..."
 
-log "env"
-env
+# Validate and load configuration
+log "Validating configuration"
+python3 /usr/local/bin/config_loader.py --validate || {
+    log "Configuration validation failed"
+    exit 1
+}
 
-log "echo \$PATH"
-echo $PATH
+# Generate JSON context for j2cli
+log "Generating configuration context"
+python3 /usr/local/bin/config_loader.py --json > /tmp/config.json
+CONFIG_SOURCE="/tmp/config.json"
 
-    log "configs for peering with metallb speaker container on same host"
-    /sbin/ip netns add $NAMESPACE_METALLB || true
-    /sbin/ip link add veth-a type veth peer name veth-b || true
-    /sbin/ip link set veth-a netns $NAMESPACE_METALLB || true
-    /sbin/ip netns exec $NAMESPACE_METALLB /sbin/ip a a $PEER_IP_LOCAL/$PEER_IP_PREFIX dev veth-a || true
-    /sbin/ip netns exec $NAMESPACE_METALLB /sbin/ip -6 a a $PEER_IPV6_LOCAL/$PEER_IPV6_PREFIX dev veth-a || true
-    /sbin/ip a a $PEER_IP_REMOTE/$PEER_IP_PREFIX dev veth-b || true
-    /sbin/ip -6 a a $PEER_IPV6_REMOTE/$PEER_IPV6_PREFIX dev veth-b || true
-    /sbin/ip link set veth-b up || true
-    /sbin/ip link set veth-b mtu $INTERFACE_MTU || true
-    /sbin/ip netns exec $NAMESPACE_METALLB /sbin/ip link set veth-a up || true
-    /sbin/ip netns exec $NAMESPACE_METALLB /sbin/ip link set veth-a mtu $INTERFACE_MTU || true
+log "Configuration loaded from: ${CONFIG_SOURCE}"
 
-# generate ports list
-#lshw -class network -json |jq '{"ports": [ .[] |select(has("businfo")) |select(.businfo|test("^pci.")) | .logicalname ]}'   > /ports.json
-#log "cat /ports.json"
-#cat /ports.json
+# Select FRR template based on configuration
+if [ -f /etc/frr/frr-multipeer.conf.j2 ]; then
+    log "Using multi-peer template"
+    FRR_TEMPLATE="/etc/frr/frr-multipeer.conf.j2"
+elif [ -f /etc/frr/frr-bfd.conf.j2 ]; then
+    log "Using BFD template"
+    FRR_TEMPLATE="/etc/frr/frr-bfd.conf.j2"
+else
+    log "Using standard template"
+    FRR_TEMPLATE="/etc/frr/frr.conf.j2"
+fi
 
-##generate frr.conf
-log 'j2 -e "" -o /etc/frr/frr.conf /etc/frr/frr.conf.j2 /etc/frr/neighbors.json'
-j2 -e "" -o /etc/frr/frr.conf /etc/frr/frr.conf.j2 /etc/frr/neighbors.json
-log "cat /etc/frr/frr.conf"
+# Extract network configuration from config file
+log "Setting up network namespace for Cilium BGP peering"
+
+# Extract values from JSON config
+NAMESPACE_CILIUM=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('namespace','cilium'))")
+VETH_FRR=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('network',{}).get('veth_names',{}).get('frr_side','veth-frr'))")
+VETH_CILIUM=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('network',{}).get('veth_names',{}).get('cilium_side','veth-cilium'))")
+INTERFACE_MTU=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('network',{}).get('interface_mtu',1500))")
+
+# Extract peering IPs
+PEER_IP_LOCAL=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv4',{}).get('local',''))")
+PEER_IP_REMOTE=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv4',{}).get('remote',''))")
+PEER_IP_PREFIX=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv4',{}).get('prefix',31))")
+
+# Extract IPv6 if present
+PEER_IPV6_LOCAL=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv6',{}).get('local',''))")
+PEER_IPV6_REMOTE=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv6',{}).get('remote',''))")
+PEER_IPV6_PREFIX=$(python3 -c "import json; c=json.load(open('/tmp/config.json')); print(c.get('bgp',{}).get('cilium',{}).get('peering',{}).get('ipv6',{}).get('prefix',126))")
+
+# Create network namespace
+/sbin/ip netns add ${NAMESPACE_CILIUM} || {
+    log "Network namespace ${NAMESPACE_CILIUM} already exists"
+}
+
+log "Creating veth pair: ${VETH_CILIUM} <-> ${VETH_FRR}"
+
+/sbin/ip link add ${VETH_CILIUM} type veth peer name ${VETH_FRR} || {
+    log "Veth pair already exists"
+}
+
+# Move one end to the namespace
+/sbin/ip link set ${VETH_CILIUM} netns ${NAMESPACE_CILIUM} || true
+
+# Configure IPv4 addresses
+if [ -n "${PEER_IP_LOCAL}" ] && [ -n "${PEER_IP_REMOTE}" ]; then
+    log "Configuring IPv4 peering: ${PEER_IP_LOCAL} <-> ${PEER_IP_REMOTE}"
+    /sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip a a ${PEER_IP_LOCAL}/${PEER_IP_PREFIX} dev ${VETH_CILIUM} || true
+    /sbin/ip a a ${PEER_IP_REMOTE}/${PEER_IP_PREFIX} dev ${VETH_FRR} || true
+fi
+
+# Configure IPv6 addresses
+if [ -n "${PEER_IPV6_LOCAL}" ] && [ -n "${PEER_IPV6_REMOTE}" ]; then
+    log "Configuring IPv6 peering: ${PEER_IPV6_LOCAL} <-> ${PEER_IPV6_REMOTE}"
+    /sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip -6 a a ${PEER_IPV6_LOCAL}/${PEER_IPV6_PREFIX} dev ${VETH_CILIUM} || true
+    /sbin/ip -6 a a ${PEER_IPV6_REMOTE}/${PEER_IPV6_PREFIX} dev ${VETH_FRR} || true
+fi
+
+# Bring up interfaces
+log "Bringing up interfaces with MTU ${INTERFACE_MTU}"
+/sbin/ip link set ${VETH_FRR} up || true
+/sbin/ip link set ${VETH_FRR} mtu ${INTERFACE_MTU} || true
+/sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip link set ${VETH_CILIUM} up || true
+/sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip link set ${VETH_CILIUM} mtu ${INTERFACE_MTU} || true
+
+# Generate FRR configuration
+log "Generating FRR configuration from template: ${FRR_TEMPLATE}"
+
+# Use the JSON context from config_loader
+j2 -o /etc/frr/frr.conf ${FRR_TEMPLATE} ${CONFIG_SOURCE}
+
+log "Generated FRR configuration:"
 cat /etc/frr/frr.conf
 
-## create vtysh.conf
+# Create vtysh.conf if it doesn't exist
 [ -r /etc/frr/vtysh.conf ] || touch /etc/frr/vtysh.conf
 
+# Set ownership
 chown -R frr:frr /etc/frr || true
 
-#enable syslogd based logging
-log "syslogd -n -O - &"
+# Enable syslog
+log "Starting syslogd"
 syslogd -n -O - &
 
-log "starting frr..."
+# Start FRR
+log "Starting FRR daemons (including BFD if enabled)"
 /usr/lib/frr/frrinit.sh start
 
-##enable lldp
-#log "mkdir -p /run/lldpd ||true"
-#mkdir -p /run/lldpd ||true
+# Wait for daemons to start
+sleep 5
 
-#log "lldpd -I eth*"
-#lldpd -I eth*
+# Check BFD status if configured
+if grep -q "bfdd=true" /etc/frr/daemons 2>/dev/null; then
+    log "Checking BFD daemon status"
+    vtysh -c "show bfd peers" || true
+fi
 
-log "ps -ef"
-ps -ef
+# Show process list
+log "Current processes:"
+ps -ef | grep -E "(bgpd|bfdd|zebra)" || true
+
+# Monitoring loop with BFD status
+MONITOR_INTERVAL=${MONITOR_INTERVAL:-60}
+MONITOR_COUNT=${MONITOR_COUNT:-5}
 
 count=0
-while true
-do
+while true; do
+    if [ $count -lt ${MONITOR_COUNT} ]; then
+        log "=== Status Check (${count}/${MONITOR_COUNT}) ==="
 
-[ $count -lt 5 ] && log "-----------Start of this run in loop------------"
+        # BGP status
+        vtysh -c "show bgp vrf all summary wide" || true
 
+        # BFD status if configured
+        if grep -q "bfdd=true" /etc/frr/daemons 2>/dev/null; then
+            log "BFD Peer Status:"
+            vtysh -c "show bfd peers brief" || true
+        fi
 
-sleep_time=60
+        # Routing table
+        vtysh -c "show ip route summary" || true
 
-if [ $count -lt 5 ];then
-    log "vtysh -c 'show bgp vrf all summary'"
-    vtysh -c "show bgp vrf all summary wide" || true
+        if [ -n "${PEER_IPV6_REMOTE}" ]; then
+            vtysh -c "show ipv6 route summary" || true
+        fi
 
-    log "vtysh -c 'show ip route'"
-    vtysh -c "show ip route" || true
-fi
+        count=$((count + 1))
+    fi
 
-if [ $count -lt 5 ];then
-    log "sleep for $sleep_time seconds..."
-    log "-----------End of this run in loop------------"
-    count=$(( count + 1 ))
-fi
-
-sleep $sleep_time
+    sleep ${MONITOR_INTERVAL}
 done
-
-# Sleep forever
-# log "sleep forever"
-# exec tail -f /dev/null

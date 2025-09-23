@@ -1,25 +1,25 @@
-router bgp {{ ASN_METALLB_LOCAL }} vrf {{ NAMESPACE_METALLB }}
+router bgp {{ ASN_CILIUM_LOCAL }} vrf {{ NAMESPACE_CILIUM }}
  bgp router-id {{ NODE_IP }}
  no bgp ebgp-requires-policy
  no bgp default ipv4-unicast
- neighbor METALLB peer-group
- neighbor METALLB remote-as {{ ASN_METALLB_REMOTE }}
- neighbor METALLB passive
+ neighbor CILIUM peer-group
+ neighbor CILIUM remote-as {{ ASN_CILIUM_REMOTE }}
+ neighbor CILIUM passive
  !
  address-family ipv4 unicast
 {% if neighbours.ipv4 is defined %}
-  neighbor {{ PEER_IP_REMOTE }} peer-group METALLB
+  neighbor {{ PEER_IP_REMOTE }} peer-group CILIUM
   neighbor {{ PEER_IP_REMOTE }} activate
 {% endif %}
-  neighbor METALLB route-map denymap out
+  neighbor CILIUM route-map denymap out
  exit-address-family
  !
  address-family ipv6 unicast
 {% if neighbours.ipv6 is defined %}
-  neighbor {{ PEER_IPV6_REMOTE }} peer-group METALLB
+  neighbor {{ PEER_IPV6_REMOTE }} peer-group CILIUM
   neighbor {{ PEER_IPV6_REMOTE }} activate
 {% endif %}
-  neighbor METALLB route-map denymap_v6 out
+  neighbor CILIUM route-map denymap_v6 out
  exit-address-family
 !
 
@@ -46,7 +46,7 @@ router bgp {{ ASN_LOCAL }}
 {% endfor %}
 {% endif %}
   redistribute connected route-map loopbacks
-  import vrf {{ NAMESPACE_METALLB }}
+  import vrf {{ NAMESPACE_CILIUM }}
  exit-address-family
  !
  address-family ipv6 unicast
@@ -57,7 +57,7 @@ router bgp {{ ASN_LOCAL }}
 {% endfor %}
 {% endif %}
   redistribute connected route-map loopbacks
-  import vrf {{ NAMESPACE_METALLB }}
+  import vrf {{ NAMESPACE_CILIUM }}
  exit-address-family
 !
 ip prefix-list denyall seq 10 deny 0.0.0.0/0

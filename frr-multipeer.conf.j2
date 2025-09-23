@@ -1,0 +1,187 @@
+! FRR Configuration with Multiple Peer Support
+! No environment variables required - all config from YAML
+
+! BFD Configuration
+bfd
+{% if bfd.profiles is defined %}
+{% for profile_name, profile in bfd.profiles.items() %}
+ profile {{ profile_name }}
+  detect-multiplier {{ profile.detect_multiplier | default(3) }}
+  receive-interval {{ profile.receive_interval | default(300) }}
+  transmit-interval {{ profile.transmit_interval | default(300) }}
+{% if profile.echo_mode is defined and profile.echo_mode %}
+  echo-mode
+{% if profile.echo_interval is defined %}
+  echo-interval {{ profile.echo_interval }}
+{% endif %}
+{% endif %}
+ exit
+ !
+{% endfor %}
+{% endif %}
+exit
+!
+
+! BGP Configuration for Cilium peering (VRF)
+router bgp {{ bgp.cilium.local_asn }}{% if bgp.cilium.namespace %} vrf {{ bgp.cilium.namespace }}{% endif %}
+
+ bgp router-id {{ bgp.upstream.router_id }}
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+
+ ! Cilium peer configuration
+ neighbor {{ bgp.cilium.peering.ipv4.remote }} remote-as {{ bgp.cilium.remote_asn }}
+ neighbor {{ bgp.cilium.peering.ipv4.remote }} description Cilium-BGP-Control-Plane
+ neighbor {{ bgp.cilium.peering.ipv4.remote }} passive
+{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
+ neighbor {{ bgp.cilium.peering.ipv4.remote }} bfd
+{% if bfd.cilium_peering.profile is defined %}
+ neighbor {{ bgp.cilium.peering.ipv4.remote }} bfd profile {{ bfd.cilium_peering.profile }}
+{% endif %}
+{% endif %}
+
+ address-family ipv4 unicast
+  neighbor {{ bgp.cilium.peering.ipv4.remote }} activate
+  neighbor {{ bgp.cilium.peering.ipv4.remote }} route-map denymap out
+ exit-address-family
+
+{% if bgp.cilium.peering.ipv6 is defined %}
+ neighbor {{ bgp.cilium.peering.ipv6.remote }} remote-as {{ bgp.cilium.remote_asn }}
+ neighbor {{ bgp.cilium.peering.ipv6.remote }} description Cilium-BGP-Control-Plane-IPv6
+ neighbor {{ bgp.cilium.peering.ipv6.remote }} passive
+{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
+ neighbor {{ bgp.cilium.peering.ipv6.remote }} bfd
+{% if bfd.cilium_peering.profile is defined %}
+ neighbor {{ bgp.cilium.peering.ipv6.remote }} bfd profile {{ bfd.cilium_peering.profile }}
+{% endif %}
+{% endif %}
+
+ address-family ipv6 unicast
+  neighbor {{ bgp.cilium.peering.ipv6.remote }} activate
+  neighbor {{ bgp.cilium.peering.ipv6.remote }} route-map denymap_v6 out
+ exit-address-family
+{% endif %}
+!
+
+! BGP Configuration for upstream fabric peering
+router bgp {{ bgp.upstream.local_asn }}
+ bgp router-id {{ bgp.upstream.router_id }}
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+ bgp bestpath as-path multipath-relax
+
+{% if bgp.upstream.peers is defined %}
+{% for peer in bgp.upstream.peers %}
+ ! Peer: {{ peer.description | default(peer.address) }}
+ neighbor {{ peer.address }} remote-as {{ peer.remote_asn }}
+{% if peer.description is defined %}
+ neighbor {{ peer.address }} description {{ peer.description }}
+{% endif %}
+{% if peer.password is defined and peer.password != "no" %}
+ neighbor {{ peer.address }} password {{ peer.password }}
+{% endif %}
+{% if peer.timers is defined %}
+ neighbor {{ peer.address }} timers {{ peer.timers.keepalive | default(10) }} {{ peer.timers.hold | default(30) }}
+{% endif %}
+{% if peer.bfd is defined and peer.bfd.enabled %}
+ neighbor {{ peer.address }} bfd
+{% if peer.bfd.profile is defined %}
+ neighbor {{ peer.address }} bfd profile {{ peer.bfd.profile }}
+{% endif %}
+{% endif %}
+{% if peer.multihop is defined %}
+ neighbor {{ peer.address }} ebgp-multihop {{ peer.multihop }}
+{% endif %}
+{% if peer.update_source is defined %}
+ neighbor {{ peer.address }} update-source {{ peer.update_source }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+ ! Address families
+ address-family ipv4 unicast
+{% if bgp.upstream.peers is defined %}
+{% for peer in bgp.upstream.peers %}
+{% if peer.address_family is not defined or peer.address_family == 'ipv4' %}
+  neighbor {{ peer.address }} activate
+{% if peer.route_map_in is defined %}
+  neighbor {{ peer.address }} route-map {{ peer.route_map_in }} in
+{% endif %}
+{% if peer.route_map_out is defined %}
+  neighbor {{ peer.address }} route-map {{ peer.route_map_out }} out
+{% endif %}
+{% if peer.prefix_list_in is defined %}
+  neighbor {{ peer.address }} prefix-list {{ peer.prefix_list_in }} in
+{% endif %}
+{% if peer.prefix_list_out is defined %}
+  neighbor {{ peer.address }} prefix-list {{ peer.prefix_list_out }} out
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+  redistribute connected route-map loopbacks
+  import vrf {{ bgp.cilium.namespace }}
+ exit-address-family
+
+ address-family ipv6 unicast
+{% if bgp.upstream.peers is defined %}
+{% for peer in bgp.upstream.peers %}
+{% if peer.address_family == 'ipv6' %}
+  neighbor {{ peer.address }} activate
+{% if peer.route_map_in is defined %}
+  neighbor {{ peer.address }} route-map {{ peer.route_map_in }} in
+{% endif %}
+{% if peer.route_map_out is defined %}
+  neighbor {{ peer.address }} route-map {{ peer.route_map_out }} out
+{% endif %}
+{% if peer.prefix_list_in is defined %}
+  neighbor {{ peer.address }} prefix-list {{ peer.prefix_list_in }} in
+{% endif %}
+{% if peer.prefix_list_out is defined %}
+  neighbor {{ peer.address }} prefix-list {{ peer.prefix_list_out }} out
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+  redistribute connected route-map loopbacks
+  import vrf {{ bgp.cilium.namespace }}
+ exit-address-family
+!
+
+! Route maps and prefix lists
+ip prefix-list denyall seq 10 deny 0.0.0.0/0
+!
+ipv6 prefix-list denyall_v6 seq 10 deny ::/0
+!
+route-map denymap permit 1
+ match ip address prefix-list denyall
+!
+route-map denymap_v6 permit 1
+ match ipv6 address prefix-list denyall_v6
+!
+route-map SETSRC permit 10
+ set src {{ bgp.upstream.router_id }}
+!
+{% if bgp.upstream.router_id_v6 is defined %}
+route-map SETSRC_V6 permit 10
+ set src {{ bgp.upstream.router_id_v6 }}
+!
+{% endif %}
+route-map loopbacks permit 10
+  match interface lo
+!
+route-map loopbacks permit 20
+  match interface dummy0
+!
+route-map loopbacks permit 30
+  match interface dummy1
+!
+ip protocol bgp route-map SETSRC
+{% if bgp.upstream.router_id_v6 is defined %}
+ipv6 protocol bgp route-map SETSRC_V6
+{% endif %}
+!
+line vty
+!
+log syslog debugging
+!

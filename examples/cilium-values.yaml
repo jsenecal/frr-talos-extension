@@ -1,0 +1,73 @@
+# Cilium Helm values for BGP Control Plane with FRR integration
+# Install with: helm install cilium cilium/cilium -f cilium-values.yaml
+
+# Enable BGP Control Plane
+bgpControlPlane:
+  enabled: true
+
+# Enable LoadBalancer service IP allocation
+ipam:
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - "10.244.0.0/16"
+    clusterPoolIPv4MaskSize: 24
+
+# LoadBalancer IP Pool
+loadBalancer:
+  algorithm: "maglev"
+  mode: "hybrid"
+  acceleration: "native"
+
+# Enable IPv6 if needed
+ipv6:
+  enabled: true
+
+# Cilium runs in kube-system namespace by default
+# The NAMESPACE_CILIUM refers to Linux network namespace, not Kubernetes namespace
+
+# Enable host networking for BGP peering
+hostNetwork:
+  enabled: true
+
+# Cilium will need to access the host network to reach the veth interface
+# The veth-cilium interface will be accessible from the host network namespace
+
+# Enable L2 announcements as fallback
+l2announcements:
+  enabled: false
+
+# Hubble for observability (optional)
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: true
+
+# Enable native routing
+routingMode: "native"
+autoDirectNodeRoutes: true
+ipv4NativeRoutingCIDR: "10.0.0.0/8"
+
+# Tunnel mode disabled for BGP
+tunnel: "disabled"
+
+# Enable endpoint routes
+endpointRoutes:
+  enabled: true
+
+# Configure BGP export for services
+bgp:
+  announce:
+    loadbalancerIP: true
+    podCIDR: false
+
+# Operator configuration
+operator:
+  replicas: 1
+
+# Agent configuration to ensure it runs in the namespace with veth access
+agent:
+  extraEnv:
+  - name: "CILIUM_BGP_PEER_PORT"
+    value: "179"

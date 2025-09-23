@@ -1,0 +1,182 @@
+! FRR Configuration with BFD Support
+! Generated from template with Cilium integration
+
+! BFD Configuration Section
+bfd
+{% if bfd.profiles is defined %}
+{% for profile_name, profile in bfd.profiles.items() %}
+ profile {{ profile_name }}
+  detect-multiplier {{ profile.detect_multiplier | default(3) }}
+  receive-interval {{ profile.receive_interval | default(300) }}
+  transmit-interval {{ profile.transmit_interval | default(300) }}
+{% if profile.echo_mode is defined and profile.echo_mode %}
+  echo-mode
+{% if profile.echo_interval is defined %}
+  echo-interval {{ profile.echo_interval }}
+{% endif %}
+{% endif %}
+{% if profile.minimum_ttl is defined %}
+  minimum-ttl {{ profile.minimum_ttl }}
+{% endif %}
+ exit
+ !
+{% endfor %}
+{% endif %}
+{% if bfd.peers is defined %}
+{% for peer in bfd.peers %}
+ peer {{ peer.address }}{% if peer.multihop is defined and peer.multihop %} multihop{% endif %}{% if peer.local_address is defined %} local-address {{ peer.local_address }}{% endif %}{% if peer.interface is defined %} interface {{ peer.interface }}{% endif %}{% if peer.vrf is defined %} vrf {{ peer.vrf }}{% endif %}
+
+{% if peer.profile is defined %}
+  profile {{ peer.profile }}
+{% else %}
+  detect-multiplier {{ peer.detect_multiplier | default(3) }}
+  receive-interval {{ peer.receive_interval | default(300) }}
+  transmit-interval {{ peer.transmit_interval | default(300) }}
+{% endif %}
+{% if peer.shutdown is defined and peer.shutdown %}
+  shutdown
+{% endif %}
+ exit
+ !
+{% endfor %}
+{% endif %}
+exit
+!
+
+! BGP Configuration with BFD for Cilium peering
+router bgp {{ ASN_CILIUM_LOCAL }} vrf {{ NAMESPACE_CILIUM }}
+ bgp router-id {{ NODE_IP }}
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+ neighbor CILIUM peer-group
+ neighbor CILIUM remote-as {{ ASN_CILIUM_REMOTE }}
+ neighbor CILIUM passive
+{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
+ neighbor CILIUM bfd
+{% if bfd.cilium_peering.profile is defined %}
+ neighbor CILIUM bfd profile {{ bfd.cilium_peering.profile }}
+{% endif %}
+{% if bfd.cilium_peering.check_control_plane_failure is defined %}
+ neighbor CILIUM bfd check-control-plane-failure
+{% endif %}
+{% endif %}
+ !
+ address-family ipv4 unicast
+{% if neighbours.ipv4 is defined %}
+  neighbor {{ PEER_IP_REMOTE }} peer-group CILIUM
+  neighbor {{ PEER_IP_REMOTE }} activate
+{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
+  neighbor {{ PEER_IP_REMOTE }} bfd
+{% if bfd.cilium_peering.profile is defined %}
+  neighbor {{ PEER_IP_REMOTE }} bfd profile {{ bfd.cilium_peering.profile }}
+{% endif %}
+{% endif %}
+{% endif %}
+  neighbor CILIUM route-map denymap out
+ exit-address-family
+ !
+ address-family ipv6 unicast
+{% if neighbours.ipv6 is defined %}
+  neighbor {{ PEER_IPV6_REMOTE }} peer-group CILIUM
+  neighbor {{ PEER_IPV6_REMOTE }} activate
+{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
+  neighbor {{ PEER_IPV6_REMOTE }} bfd
+{% if bfd.cilium_peering.profile is defined %}
+  neighbor {{ PEER_IPV6_REMOTE }} bfd profile {{ bfd.cilium_peering.profile }}
+{% endif %}
+{% endif %}
+{% endif %}
+  neighbor CILIUM route-map denymap_v6 out
+ exit-address-family
+!
+
+! BGP Configuration with BFD for upstream fabric peering
+router bgp {{ ASN_LOCAL }}
+ bgp router-id {{ NODE_IP }}
+ no bgp ebgp-requires-policy
+ no bgp default ipv4-unicast
+ bgp bestpath as-path multipath-relax
+ neighbor FABRIC peer-group
+ neighbor FABRIC remote-as {{ bgp.upstream.fabric_asn | default(48579) }}
+ neighbor FABRIC timers {{ bgp.upstream.timers.keepalive | default(1) }} {{ bgp.upstream.timers.hold | default(3) }}
+{% if not "no" in NEIGHBOR_PASSWORD %}
+ neighbor FABRIC password {{ NEIGHBOR_PASSWORD }}
+{% endif %}
+{% if bfd.fabric_peering is defined and bfd.fabric_peering.enabled %}
+ neighbor FABRIC bfd
+{% if bfd.fabric_peering.profile is defined %}
+ neighbor FABRIC bfd profile {{ bfd.fabric_peering.profile }}
+{% endif %}
+{% if bfd.fabric_peering.check_control_plane_failure is defined %}
+ neighbor FABRIC bfd check-control-plane-failure
+{% endif %}
+{% endif %}
+ !
+ address-family ipv4 unicast
+{% if neighbours.ipv4 is defined %}
+{% for n in neighbours.ipv4 %}
+  neighbor {{ n }} peer-group FABRIC
+  neighbor {{ n }} activate
+{% if bfd.fabric_peering is defined and bfd.fabric_peering.enabled %}
+  neighbor {{ n }} bfd
+{% if bfd.fabric_peering.profile is defined %}
+  neighbor {{ n }} bfd profile {{ bfd.fabric_peering.profile }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+  redistribute connected route-map loopbacks
+  import vrf {{ NAMESPACE_CILIUM }}
+ exit-address-family
+ !
+ address-family ipv6 unicast
+{% if neighbours.ipv6 is defined %}
+{% for n in neighbours.ipv6 %}
+  neighbor {{ n }} peer-group FABRIC
+  neighbor {{ n }} activate
+{% if bfd.fabric_peering is defined and bfd.fabric_peering.enabled %}
+  neighbor {{ n }} bfd
+{% if bfd.fabric_peering.profile is defined %}
+  neighbor {{ n }} bfd profile {{ bfd.fabric_peering.profile }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+  redistribute connected route-map loopbacks
+  import vrf {{ NAMESPACE_CILIUM }}
+ exit-address-family
+!
+
+! Route maps and prefix lists
+ip prefix-list denyall seq 10 deny 0.0.0.0/0
+!
+ipv6 prefix-list denyall_v6 seq 10 deny ::/0
+!
+route-map denymap permit 1
+ match ip address prefix-list denyall
+!
+route-map denymap_v6 permit 1
+ match ipv6 address prefix-list denyall_v6
+!
+route-map SETSRC permit 10
+ set src {{ NODE_IP }}
+!
+route-map SETSRC_V6 permit 10
+ set src {{ NODE_IPV6 }}
+!
+route-map loopbacks permit 10
+  match interface lo
+!
+route-map loopbacks permit 20
+  match interface dummy0
+!
+route-map loopbacks permit 30
+  match interface dummy1
+!
+ip protocol bgp route-map SETSRC
+ipv6 protocol bgp route-map SETSRC_V6
+!
+line vty
+!
+log syslog debugging
+!

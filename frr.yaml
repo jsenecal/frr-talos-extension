@@ -4,7 +4,10 @@ container:
   args:
     - --
     - /usr/lib/frr/docker-start
+  environment:
+    FRR_CONFIG_FILE: /etc/frr/config.yaml
   security:
-    writeableRootfs: true
-    writeableSysfs: true
+    privileged: true  # Required for network namespace operations
 restart: always
+depends:
+  - network: Ready  # Wait for network to be ready
