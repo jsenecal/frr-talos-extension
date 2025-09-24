@@ -12,7 +12,7 @@ This FRR extension provides BGP routing capabilities for Talos Linux nodes, inte
 - **Multiple BGP Peers**: Configure unlimited peers with individual settings
 - **Per-Peer Configuration**: Different passwords, timers, BFD profiles per peer
 - **BGP Routing**: Full BGP support with FRR 10.4.1
-- **Cilium Integration**: Replaces MetalLB for LoadBalancer services
+- **Cilium Integration**: Works with Cilium BGP Control Plane for LoadBalancer services
 - **BFD Support**: Fast failure detection with configurable profiles
 - **Dual Stack**: IPv4 and IPv6 support with per-peer address families
 
