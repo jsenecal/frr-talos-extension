@@ -1,5 +1,7 @@
 # FRR Talos System Extension
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 BGP routing for Talos Linux with Cilium integration, multi-peer support, and BFD configuration.
 
 ## Acknowledgments
