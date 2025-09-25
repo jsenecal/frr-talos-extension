@@ -94,7 +94,7 @@ configFiles:
         fabric_peering:
           enabled: true
           profile: datacenter
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 
 environment:
   - FRR_USE_BFD=true

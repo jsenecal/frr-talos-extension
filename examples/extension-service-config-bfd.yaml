@@ -126,8 +126,7 @@ configFiles:
             profile: normal
             multihop: false
             local_address: 10.10.10.10
-    mountPath: /etc/frr/config.yaml
-
+    mountPath: /usr/local/etc/frr/config.yaml
 
   # FRR daemons configuration with BFD enabled
   - content: |
@@ -139,19 +138,10 @@ configFiles:
       staticd_options="-A 127.0.0.1"
       bfdd=true
       bfdd_options="-A 127.0.0.1"
-    mountPath: /etc/frr/daemons
+    mountPath: /usr/local/etc/frr/daemons
 
   # VTY shell configuration
   - content: |
       service integrated-vtysh-config
       hostname frr
-    mountPath: /etc/frr/vtysh.conf
-
-  # FRR template selection (use BFD-enabled template)
-  - content: |
-      FRR_TEMPLATE=/etc/frr/frr-bfd.conf.j2
-    mountPath: /etc/frr/template.conf
-
-# Only one optional environment variable to specify config location
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/vtysh.conf

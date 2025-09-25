@@ -100,7 +100,7 @@ configFiles:
           profile: aggressive
           check_control_plane_failure: true
 
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 
   # FRR daemons configuration
   - content: |
@@ -112,17 +112,13 @@ configFiles:
       staticd_options="-A 127.0.0.1"
       bfdd=true
       bfdd_options="-A 127.0.0.1"
-    mountPath: /etc/frr/daemons
+    mountPath: /usr/local/etc/frr/daemons
 
   # VTY shell configuration
   - content: |
       service integrated-vtysh-config
       hostname frr
-    mountPath: /etc/frr/vtysh.conf
-
-# Optional: specify config file location (defaults to /etc/frr/config.yaml)
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/vtysh.conf
 
 ---
 # For per-node configuration, create separate ExtensionServiceConfig for each node
@@ -141,4 +137,4 @@ configFiles:
               remote_asn: 48579
               password: "node2Secret"
       # ... rest of configuration same as above
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml

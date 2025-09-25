@@ -23,8 +23,8 @@ Starting with Talos v1.5.0, extension services can be configured using `Extensio
 │  │    - neighbors.json                 │    │
 │  │    - daemons                        │    │
 │  │                                      │    │
-│  │  - environment:                     │    │
-│  │    - FRR_CONFIG_FILE (optional)    │    │
+│  │                                      │    │
+│  │  (No environment variables needed)  │    │
 │  └─────────────────────────────────────┘    │
 │                      │                       │
 │                      ▼                       │
@@ -72,10 +72,9 @@ configFiles:
           router_id: 10.10.10.10    # Define directly here
       network:
         interface_mtu: 1500
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml  # Optional
+# No environment variables needed
 ```
 
 ### Method 2: Per-Node Configuration
@@ -91,7 +90,7 @@ configFiles:
         upstream:
           local_asn: 4200001001  # node1 specific
           router_id: 10.10.10.1
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 ### Method 3: Override Specific Values
@@ -109,10 +108,9 @@ configFiles:
           "ipv6": ["2001:db8::1", "2001:db8::2"]
         }
       }
-    mountPath: /etc/frr/neighbors.json
+    mountPath: /usr/local/etc/frr/neighbors.json
 
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml
+# No environment variables needed
 ```
 
 ## How It Works
@@ -151,9 +149,9 @@ configFiles:
           local_asn: 4200001001  # All values in config
           router_id: 10.10.10.10
           password: "secret"
-    mountPath: /etc/frr/config.yaml
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml  # Only config path
+    mountPath: /usr/local/etc/frr/config.yaml
+
+# No environment variables needed
 ```
 
 ## Advanced Features
@@ -178,7 +176,7 @@ configFiles:
         upstream:
           local_asn: 4200001001
           router_id: 10.10.10.1
-    mountPath: /etc/frr/config.local.yaml
+    mountPath: /usr/local/etc/frr/config.local.yaml
 ```
 
 ### Secret Management

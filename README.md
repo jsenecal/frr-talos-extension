@@ -54,7 +54,7 @@ configFiles:
               bfd:
                 enabled: true
                 profile: normal
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 ## Configuration

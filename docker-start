@@ -23,17 +23,9 @@ CONFIG_SOURCE="/tmp/config.json"
 
 log "Configuration loaded from: ${CONFIG_SOURCE}"
 
-# Select FRR template based on configuration
-if [ -f /etc/frr/frr-multipeer.conf.j2 ]; then
-    log "Using multi-peer template"
-    FRR_TEMPLATE="/etc/frr/frr-multipeer.conf.j2"
-elif [ -f /etc/frr/frr-bfd.conf.j2 ]; then
-    log "Using BFD template"
-    FRR_TEMPLATE="/etc/frr/frr-bfd.conf.j2"
-else
-    log "Using standard template"
-    FRR_TEMPLATE="/etc/frr/frr.conf.j2"
-fi
+# Use the FRR multi-peer template
+FRR_TEMPLATE="/etc/frr/frr.conf.j2"
+log "Using FRR template: ${FRR_TEMPLATE}"
 
 # Extract network configuration from config file
 log "Setting up network namespace for Cilium BGP peering"

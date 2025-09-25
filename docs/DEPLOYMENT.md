@@ -39,9 +39,7 @@ configFiles:
                 enabled: true
                 profile: normal
       # ... rest of configuration
-    mountPath: /etc/frr/config.yaml
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 Apply the configuration:
@@ -234,7 +232,7 @@ To add more upstream BGP peers, modify the `neighbors.json` file:
 
 ### Custom Route Maps
 
-Add custom route maps in `frr.conf.j2` for advanced routing policies.
+Add custom route maps in `frr.conf.j2` for advanced routing policies or use the `route_filters` configuration section.
 
 ## References
 

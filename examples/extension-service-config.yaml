@@ -97,7 +97,7 @@ configFiles:
         veth_names:
           frr_side: veth-frr
           cilium_side: veth-cilium
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 
   # FRR daemons configuration
   - content: |
@@ -109,14 +109,10 @@ configFiles:
       staticd_options="-A 127.0.0.1"
       bfdd=true
       bfdd_options="-A 127.0.0.1"
-    mountPath: /etc/frr/daemons
+    mountPath: /usr/local/etc/frr/daemons
 
   # VTY shell configuration
   - content: |
       service integrated-vtysh-config
       hostname frr
-    mountPath: /etc/frr/vtysh.conf
-
-# Only one optional environment variable to specify config location
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/vtysh.conf

@@ -13,9 +13,7 @@ name: frr
 configFiles:
   - content: |
       # Complete configuration here
-    mountPath: /etc/frr/config.yaml
-environment:
-  - FRR_CONFIG_FILE=/etc/frr/config.yaml  # Optional, this is the default
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 ## Configuration Files
@@ -25,7 +23,6 @@ The system loads configuration files in this order (later files override earlier
 1. `/etc/frr/config.default.yaml` - Built-in defaults from container
 2. `/etc/frr/config.yaml` - Main configuration file
 3. `/etc/frr/config.local.yaml` - Local overrides (if present)
-4. File specified in `FRR_CONFIG_FILE` environment variable (if set)
 
 ## Complete Configuration Example
 
@@ -80,6 +77,14 @@ bgp:
           enabled: true
           profile: normal
 
+    # Optional: Global networks to announce to all peers
+    networks:
+      ipv4:
+        - 192.168.0.0/24
+        - 10.0.0.0/24
+      ipv6:
+        - 2001:db8:1::/48
+
 network:
   interface_mtu: 1500
   veth_names:
@@ -125,7 +130,7 @@ configFiles:
             - address: 10.0.0.1
               remote_asn: 48579
               password: "node1secret"
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 ### Node 2
@@ -143,7 +148,7 @@ configFiles:
             - address: 10.0.0.2
               remote_asn: 48579
               password: "node2secret"
-    mountPath: /etc/frr/config.yaml
+    mountPath: /usr/local/etc/frr/config.yaml
 ```
 
 ## Applying Configuration
@@ -182,6 +187,43 @@ cat /etc/frr/frr.conf
 vtysh -c "show running-config"
 ```
 
+## Network Announcements
+
+You can configure specific networks to announce to upstream peers:
+
+### Global Networks
+Define networks to announce to all peers:
+
+```yaml
+bgp:
+  upstream:
+    networks:
+      ipv4:
+        - 192.168.0.0/24
+        - 10.0.0.0/24
+      ipv6:
+        - 2001:db8:1::/48
+```
+
+### Per-Peer Networks
+Override global settings for specific peers:
+
+```yaml
+peers:
+  - address: 10.0.0.1
+    remote_asn: 48579
+    # Only announce these networks to this peer
+    advertise_networks:
+      - 203.0.113.0/24    # Public IPs
+      - 198.51.100.0/24
+    # Optional: Set BGP attributes
+    advertise_set:
+      as_path_prepend: "4200001001 4200001001"
+      community: "48579:100"
+```
+
+For detailed network announcement configuration, see [NETWORK-ANNOUNCEMENTS.md](NETWORK-ANNOUNCEMENTS.md).
+
 ## Key Benefits
 
 - **Single source of truth**: All configuration in one file
@@ -189,4 +231,5 @@ vtysh -c "show running-config"
 - **Self-documenting**: Clear structure and field names
 - **Version control friendly**: Easy to diff and review changes
 - **Multiple peers**: Configure many peers with different settings
+- **Flexible network announcements**: Per-peer filtering and attributes
 - **Clean machine config**: Simple ExtensionServiceConfig approach

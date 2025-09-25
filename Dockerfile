@@ -11,10 +11,8 @@ RUN chmod +x /usr/local/bin/config_loader.py
 # Copy default configuration template
 COPY examples/config-bfd.yaml /etc/frr/config.default.yaml
 
-# Copy FRR templates (standard, BFD, and multi-peer)
+# Copy FRR template
 COPY frr.conf.j2 /etc/frr/frr.conf.j2
-COPY frr-bfd.conf.j2 /etc/frr/frr-bfd.conf.j2
-COPY frr-multipeer.conf.j2 /etc/frr/frr-multipeer.conf.j2
 
 # No environment variables needed - everything comes from config files
 
@@ -33,7 +31,7 @@ RUN sed -i 's/^bfdd_options=.*/bfdd_options="-A 127.0.0.1"/' /etc/frr/daemons ||
 RUN mkdir -p /etc/frr/config.d
 
 # Create a version file for tracking
-RUN echo "FRR Extension v2.0 - Config File Only" > /etc/frr/version
+RUN echo "FRR Extension v10.4.1 - Config File Only with Network Announcements" > /etc/frr/version
 
 FROM scratch AS frr
 COPY --from=base / /rootfs/usr/local/lib/containers/frr/

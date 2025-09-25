@@ -1,0 +1,139 @@
+# FRR Configuration with Network Announcements
+# This example shows how to announce specific networks to different upstream peers
+
+bgp:
+  cilium:
+    local_asn: 4200099998
+    remote_asn: 4200099999
+    namespace: cilium
+    peering:
+      ipv4:
+        local: 192.168.250.254
+        remote: 192.168.250.255
+        prefix: 31
+      ipv6:
+        local: fdae:6bef:5e65::1
+        remote: fdae:6bef:5e65::2
+        prefix: 126
+
+  upstream:
+    local_asn: 4200001001
+    router_id: 10.10.10.10
+    router_id_v6: 2001:db8::1
+
+    # Global networks to announce to all peers (unless they have specific advertise_networks)
+    networks:
+      ipv4:
+        - 192.168.0.0/24    # Private network
+        - 10.0.0.0/24       # Another private network
+      ipv6:
+        - 2001:db8:1::/48   # IPv6 network
+
+    peers:
+      # Peer 1: Public IP provider - only announce public IPs
+      - address: 10.0.0.1
+        remote_asn: 48579
+        description: "ISP1-Public"
+        password: "secret1"
+        timers:
+          keepalive: 10
+          hold: 30
+        # Specific networks to announce to this peer (overrides global networks)
+        advertise_networks:
+          - 203.0.113.0/24    # Public IP range 1
+          - 198.51.100.0/24   # Public IP range 2
+        # Optional: Set attributes for advertised routes
+        advertise_set:
+          as_path_prepend: "4200001001 4200001001"  # Prepend our AS twice
+          community: "48579:100"                      # Add community tag
+
+      # Peer 2: Private network peer - only announce private IPs
+      - address: 10.0.0.2
+        remote_asn: 65001
+        description: "Private-Peer"
+        password: "secret2"
+        advertise_networks:
+          - 192.168.0.0/16    # Private network aggregate
+          - 10.0.0.0/8        # Private 10.x.x.x aggregate
+        advertise_set:
+          local_preference: 200
+          metric: 100
+
+      # Peer 3: Transit provider - announce everything (uses global networks)
+      - address: 10.0.0.3
+        remote_asn: 65002
+        description: "Transit-Provider"
+        password: "secret3"
+        # No advertise_networks specified - will use global networks list
+
+      # Peer 4: IPv6 peer - announce specific IPv6 networks
+      - address: 2001:db8::ffff
+        remote_asn: 65003
+        address_family: ipv6
+        description: "IPv6-Transit"
+        advertise_networks:
+          - 2001:db8:1::/48   # IPv6 customer range
+          - 2001:db8:2::/48   # Another IPv6 range
+        advertise_set:
+          as_path_prepend: "4200001001"
+          community: "65003:200"
+
+      # Peer 5: Custom route-map (advanced)
+      - address: 10.0.0.5
+        remote_asn: 65004
+        description: "Custom-Filtered"
+        # Use a custom route-map for complex filtering
+        route_map_out: "CUSTOM_EXPORT"
+
+# Optional: Custom route filters for advanced scenarios
+route_filters:
+  prefix_lists:
+    ipv4:
+      CUSTOM_EXPORT:
+        rules:
+          - seq: 10
+            action: permit
+            prefix: 203.0.113.0/24
+          - seq: 20
+            action: permit
+            prefix: 198.51.100.0/23
+            ge: 24
+            le: 24
+    ipv6:
+      IPV6_EXPORT:
+        rules:
+          - seq: 10
+            action: permit
+            prefix: 2001:db8::/32
+            ge: 48
+            le: 48
+
+  route_maps:
+    CUSTOM_EXPORT:
+      rules:
+        - seq: 10
+          action: permit
+          match:
+            prefix_list: CUSTOM_EXPORT
+            address_family: ipv4
+          set:
+            local_preference: 150
+            community: "65004:300"
+        - seq: 20
+          action: deny
+
+# BFD Configuration
+bfd:
+  profiles:
+    normal:
+      detect_multiplier: 3
+      receive_interval: 300
+      transmit_interval: 300
+    aggressive:
+      detect_multiplier: 3
+      receive_interval: 100
+      transmit_interval: 100
+
+  cilium_peering:
+    enabled: true
+    profile: aggressive
