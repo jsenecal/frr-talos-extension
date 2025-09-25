@@ -2,6 +2,10 @@
 
 BGP routing for Talos Linux with Cilium integration, multi-peer support, and BFD configuration.
 
+## Acknowledgments
+
+This project is based on the original work in [abckey/frr-talos-extension](https://github.com/abckey/frr-talos-extension) by Kai Zhang (kimi.zhangkai@gmail.com).
+
 ## Overview
 
 This FRR extension provides BGP routing capabilities for Talos Linux nodes, integrating with Cilium BGP Control Plane for LoadBalancer service management. All configuration is managed through ExtensionServiceConfig files without environment variables.
