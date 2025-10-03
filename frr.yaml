@@ -11,6 +11,13 @@ container:
   args:
     - --
     - /usr/lib/frr/docker-start
+  mounts:
+    - source: /var/run/frr
+      destination: /tmp
+      type: bind
+      options:
+        - bind
+        - rw
   security:
     privileged: true
 restart: always
