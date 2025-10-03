@@ -1,11 +1,16 @@
 name: frr
+depends:
+  - service: cri
+  - network:
+    - addresses
+    - connectivity
+    - etcfiles
+  - configuration: true
 container:
   entrypoint: /sbin/tini
   args:
     - --
     - /usr/lib/frr/docker-start
   security:
-    privileged: true  # Required for network namespace operations
+    privileged: true
 restart: always
-depends:
-  - network: Ready  # Wait for network to be ready
