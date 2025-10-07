@@ -1,7 +1,7 @@
 version: v1alpha1
 metadata:
   name: frr
-  version: v1.2.3
+  version: v1.0.1
   author: Kai Zhang (kimi.zhangkai@gmail.com), Jonathan Senecal (contact@jonathansenecal.com)
   description: |
     This system extension provides FRR BGP routing on the host with Cilium integration.
