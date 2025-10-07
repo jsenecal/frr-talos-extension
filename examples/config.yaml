@@ -1,0 +1,38 @@
+# FRR-Cilium BGP Configuration
+# This file is mounted via ExtensionServiceConfig at /usr/local/etc/frr/config.yaml
+
+bgp:
+  cilium:
+    local_asn: 4200099998
+    remote_asn: 4200099999
+    namespace: cilium  # Linux network namespace name
+    peering:
+      ipv4:
+        local: 192.168.250.254
+        remote: 192.168.250.255
+        prefix: 31
+      ipv6:
+        local: "fdae:6bef:5e65::1"
+        remote: "fdae:6bef:5e65::2"
+        prefix: 126
+
+  upstream:
+    local_asn: 4200001001      # Your node's ASN
+    router_id: 10.10.10.10      # Your node's IP
+    router_id_v6: "2001:db8::1" # Your node's IPv6 (optional)
+
+    # Single peer example - for multiple peers see extension-service-config-bfd.yaml
+    peers:
+      - address: 10.0.0.1
+        remote_asn: 48579
+        description: "Leaf Switch 1"
+        password: "mySecretPassword"
+        timers:
+          keepalive: 1
+          hold: 3
+
+network:
+  interface_mtu: 1500
+  veth_names:
+    frr_side: veth-frr
+    cilium_side: veth-cilium

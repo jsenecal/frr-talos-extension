@@ -1,10 +1,11 @@
 version: v1alpha1
 metadata:
   name: frr
-  version: v8.4.1
-  author: Kai Zhang (kimi.zhangkai@gmail.com)
+  version: v1.2.3
+  author: Kai Zhang (kimi.zhangkai@gmail.com), Jonathan Senecal (contact@jonathansenecal.com)
   description: |
-    This system extension provides `frr` BGP routing on the host.
+    This system extension provides FRR BGP routing on the host with Cilium integration.
+    Configuration-only approach with network announcement filtering per peer.
   compatibility:
     talos:
-      version: "> v1.2.0"
+      version: ">= v1.5.0"

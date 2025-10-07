@@ -1,10 +1,29 @@
 name: frr
+depends:
+  - service: cri
+  - network:
+      - addresses
+      - connectivity
+      - etcfiles
+  - configuration: true
 container:
   entrypoint: /sbin/tini
   args:
     - --
     - /usr/lib/frr/docker-start
+  mounts:
+    - source: /var/lib/frr
+      destination: /etc/frr
+      type: bind
+      options:
+        - bind
+        - rw
+    - source: /var/run/frr
+      destination: /tmp
+      type: bind
+      options:
+        - bind
+        - rw
   security:
-    writeableRootfs: true
-    writeableSysfs: true
-restart: always
+    privileged: true
+restart: untilSuccess

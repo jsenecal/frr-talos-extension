@@ -1,0 +1,99 @@
+# FRR-Cilium BGP Configuration with BFD Support
+# This file is mounted via ExtensionServiceConfig at /usr/local/etc/frr/config.yaml
+
+bgp:
+  cilium:
+    local_asn: 4200099998
+    remote_asn: 4200099999
+    namespace: cilium  # Linux network namespace name
+    peering:
+      ipv4:
+        local: 192.168.250.254
+        remote: 192.168.250.255
+        prefix: 31
+      ipv6:
+        local: "fdae:6bef:5e65::1"
+        remote: "fdae:6bef:5e65::2"
+        prefix: 126
+
+  upstream:
+    local_asn: 4200001001      # Your node's ASN
+    router_id: 10.10.10.10      # Your node's IP
+    router_id_v6: "2001:db8::1"  # Your node's IPv6 (optional)
+
+    # Multiple peers with BFD support
+    peers:
+      - address: 10.0.0.1
+        remote_asn: 48579
+        description: "Leaf Switch 1"
+        password: "mySecretPassword"
+        timers:
+          keepalive: 1
+          hold: 3
+        bfd:
+          enabled: true
+          profile: normal
+
+      - address: 10.0.0.2
+        remote_asn: 48579
+        description: "Leaf Switch 2"
+        password: "mySecretPassword2"
+        bfd:
+          enabled: true
+          profile: aggressive
+
+network:
+  interface_mtu: 1500
+  veth_names:
+    frr_side: veth-frr
+    cilium_side: veth-cilium
+
+# BFD Configuration Section
+bfd:
+  # BFD Profiles - reusable timer configurations
+  profiles:
+    aggressive:
+      detect_multiplier: 3
+      receive_interval: 100    # milliseconds
+      transmit_interval: 100   # milliseconds
+      echo_mode: false
+
+    normal:
+      detect_multiplier: 3
+      receive_interval: 300
+      transmit_interval: 300
+      echo_mode: false
+
+    relaxed:
+      detect_multiplier: 5
+      receive_interval: 1000
+      transmit_interval: 1000
+      echo_mode: false
+
+  # BFD for Cilium peering (local veth connection)
+  cilium_peering:
+    enabled: true
+    profile: aggressive  # Use aggressive profile for local peering
+    check_control_plane_failure: true
+
+  # BFD for upstream fabric peering
+  fabric_peering:
+    enabled: true
+    profile: normal  # Use normal profile for fabric peering
+    check_control_plane_failure: true
+
+  # Direct BFD peer configuration (optional)
+  # Used for non-BGP BFD sessions or manual peer configuration
+  peers:
+    - address: 192.168.250.255
+      profile: aggressive
+      interface: veth-frr
+
+    # Monitor upstream router with BFD
+    - address: 10.0.0.1
+      profile: normal
+      multihop: false
+      local_address: 10.10.10.10
+
+# Note: The 'neighbors' section is deprecated.
+# Use bgp.upstream.peers instead for BGP peer configuration.
