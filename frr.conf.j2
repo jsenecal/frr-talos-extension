@@ -270,19 +270,20 @@ ipv6 protocol bgp route-map SETSRC_V6
 {% if bgp.upstream.peers is defined %}
 ! Auto-generated route-maps and prefix-lists for network advertisements
 {% for peer in bgp.upstream.peers %}
+{% set peer_index = loop.index %}
 {% if peer.advertise_networks is defined and peer.advertise_networks %}
 {% if peer.address_family is not defined or peer.address_family == 'ipv4' %}
 ! IPv4 prefix-list for peer {{ peer.address }}
 {% for network in peer.advertise_networks %}
 {% if ':' not in network %}
 {% set prefix_len = network.split('/')[-1] %}
-ip prefix-list NETS_{{ loop.index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 32
+ip prefix-list NETS_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 32
 {% endif %}
 {% endfor %}
 !
 ! IPv4 route-map for peer {{ peer.address }}
-route-map ADVERTISE_{{ loop.index }} permit 10
- match ip address prefix-list NETS_{{ loop.index }}
+route-map ADVERTISE_{{ peer_index }} permit 10
+ match ip address prefix-list NETS_{{ peer_index }}
 {% if peer.advertise_set is defined %}
 {% if peer.advertise_set.local_preference is defined %}
  set local-preference {{ peer.advertise_set.local_preference }}
@@ -298,20 +299,20 @@ route-map ADVERTISE_{{ loop.index }} permit 10
 {% endif %}
 {% endif %}
 !
-route-map ADVERTISE_{{ loop.index }} deny 20
+route-map ADVERTISE_{{ peer_index }} deny 20
 !
 {% elif peer.address_family == 'ipv6' %}
 ! IPv6 prefix-list for peer {{ peer.address }}
 {% for network in peer.advertise_networks %}
 {% if ':' in network %}
 {% set prefix_len = network.split('/')[-1] %}
-ipv6 prefix-list NETS_V6_{{ loop.index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 128
+ipv6 prefix-list NETS_V6_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 128
 {% endif %}
 {% endfor %}
 !
 ! IPv6 route-map for peer {{ peer.address }}
-route-map ADVERTISE_V6_{{ loop.index }} permit 10
- match ipv6 address prefix-list NETS_V6_{{ loop.index }}
+route-map ADVERTISE_V6_{{ peer_index }} permit 10
+ match ipv6 address prefix-list NETS_V6_{{ peer_index }}
 {% if peer.advertise_set is defined %}
 {% if peer.advertise_set.local_preference is defined %}
  set local-preference {{ peer.advertise_set.local_preference }}
@@ -327,7 +328,7 @@ route-map ADVERTISE_V6_{{ loop.index }} permit 10
 {% endif %}
 {% endif %}
 !
-route-map ADVERTISE_V6_{{ loop.index }} deny 20
+route-map ADVERTISE_V6_{{ peer_index }} deny 20
 !
 {% endif %}
 {% endif %}
