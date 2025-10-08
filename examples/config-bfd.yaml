@@ -33,6 +33,15 @@ bgp:
         bfd:
           enabled: true
           profile: normal
+        # Network advertisement with prefix-list filtering
+        # By default, uses ge=prefix_len, le=32 (IPv4) or le=128 (IPv6)
+        # This allows matching more-specific routes (e.g., pod IPs within 10.42.0.0/16)
+        advertise_networks:
+          - 10.42.0.0/16      # Matches 10.42.0.0/16 to /32 (default ge=16, le=32)
+          - 10.43.0.0/16      # Matches 10.43.0.0/16 to /32
+        # Optional: Set custom ge/le for all networks on this peer
+        # advertise_ge: 24    # Only advertise /24 or more specific
+        # advertise_le: 28    # Only advertise up to /28
 
       - address: 10.0.0.2
         remote_asn: 48579
@@ -41,6 +50,15 @@ bgp:
         bfd:
           enabled: true
           profile: aggressive
+        # Per-network ge/le overrides (advanced usage)
+        advertise_networks:
+          - 10.42.0.0/16              # Uses defaults: ge=16, le=32
+          - network: 10.50.0.0/16     # Custom ge/le for this network only
+            ge: 24
+            le: 28
+          - network: 192.168.1.0/24   # Exact match only (no ge/le)
+            ge: false
+            le: false
 
 network:
   interface_mtu: 1500

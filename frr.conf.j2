@@ -128,8 +128,19 @@ route-map loopbacks permit 30
 {% if peer.address_family is not defined or peer.address_family == 'ipv4' %}
 ! IPv4 prefix-list for peer {{ peer.address }}
 {% for network in peer.advertise_networks %}
-{% if ':' not in network %}
-ip prefix-list NETS_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }}
+{# Handle both string and dict formats #}
+{% if network is mapping %}
+{% set net_prefix = network.network %}
+{% set net_ge = network.ge if network.ge is defined else (peer.advertise_ge if peer.advertise_ge is defined else network.network.split('/')[-1]) %}
+{% set net_le = network.le if network.le is defined else (peer.advertise_le if peer.advertise_le is defined else 32) %}
+{% else %}
+{% set net_prefix = network %}
+{% set net_ge = peer.advertise_ge if peer.advertise_ge is defined else network.split('/')[-1] %}
+{% set net_le = peer.advertise_le if peer.advertise_le is defined else 32 %}
+{% endif %}
+{% if ':' not in net_prefix %}
+ip prefix-list NETS_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ net_prefix }}{% if net_ge is not none and net_ge != false %} ge {{ net_ge }}{% endif %}{% if net_le is not none and net_le != false %} le {{ net_le }}{% endif %}
+
 {% endif %}
 {% endfor %}
 !
@@ -156,8 +167,19 @@ route-map ADVERTISE_{{ peer_index }} deny 20
 {% elif peer.address_family == 'ipv6' %}
 ! IPv6 prefix-list for peer {{ peer.address }}
 {% for network in peer.advertise_networks %}
-{% if ':' in network %}
-ipv6 prefix-list NETS_V6_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }}
+{# Handle both string and dict formats #}
+{% if network is mapping %}
+{% set net_prefix = network.network %}
+{% set net_ge = network.ge if network.ge is defined else (peer.advertise_ge if peer.advertise_ge is defined else network.network.split('/')[-1]) %}
+{% set net_le = network.le if network.le is defined else (peer.advertise_le if peer.advertise_le is defined else 128) %}
+{% else %}
+{% set net_prefix = network %}
+{% set net_ge = peer.advertise_ge if peer.advertise_ge is defined else network.split('/')[-1] %}
+{% set net_le = peer.advertise_le if peer.advertise_le is defined else 128 %}
+{% endif %}
+{% if ':' in net_prefix %}
+ipv6 prefix-list NETS_V6_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ net_prefix }}{% if net_ge is not none and net_ge != false %} ge {{ net_ge }}{% endif %}{% if net_le is not none and net_le != false %} le {{ net_le }}{% endif %}
+
 {% endif %}
 {% endfor %}
 !
