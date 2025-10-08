@@ -89,14 +89,20 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default="/usr/local/etc/frr/config.yaml",
-        help="Config file path (deprecated, not used)",
+        default=None,
+        help="Single config file path (for local validation)",
     )
 
     args = parser.parse_args()
 
     loader = ConfigLoader()
-    config = loader.load()
+
+    # If --config is provided, load only that file (for validation)
+    if args.config:
+        config = loader.load_file(args.config)
+    else:
+        # Otherwise use the standard multi-file loading (for container runtime)
+        config = loader.load()
 
     if args.validate:
         # Basic validation

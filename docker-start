@@ -81,12 +81,41 @@ log "Bringing up interfaces with MTU ${INTERFACE_MTU}"
 /sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip link set ${VETH_CILIUM} up || true
 /sbin/ip netns exec ${NAMESPACE_CILIUM} /sbin/ip link set ${VETH_CILIUM} mtu ${INTERFACE_MTU} || true
 
-# Initialize /etc/frr if empty (first boot with bind mount)
-if [ ! -f /etc/frr/.initialized ]; then
-    log "Initializing /etc/frr directory (first boot)"
+# Version-based initialization
+CURRENT_VERSION=""
+if [ -f /etc/frr.defaults/VERSION ]; then
+    CURRENT_VERSION=$(cat /etc/frr.defaults/VERSION)
+    log "Container version: ${CURRENT_VERSION}"
+fi
+
+INSTALLED_VERSION=""
+if [ -f /etc/frr/.initialized ]; then
+    INSTALLED_VERSION=$(cat /etc/frr/.initialized 2>/dev/null || echo "")
+    log "Installed version: ${INSTALLED_VERSION}"
+else
+    log "No initialized marker found (first boot)"
+fi
+
+# Initialize or update if version mismatch or first boot
+if [ "$CURRENT_VERSION" != "$INSTALLED_VERSION" ] || [ ! -f /etc/frr/.initialized ]; then
+    if [ -z "$INSTALLED_VERSION" ]; then
+        log "Initializing /etc/frr directory (first boot)"
+    else
+        log "Version mismatch detected (${INSTALLED_VERSION} -> ${CURRENT_VERSION})"
+        log "Updating template and configuration files..."
+    fi
+
     # Copy defaults from backup to mounted directory
-    cp -r /etc/frr.defaults/* /etc/frr/ 2>/dev/null || true
-    touch /etc/frr/.initialized
+    # Important: Copy template and daemons, but preserve frr.conf if it exists
+    mkdir -p /etc/frr
+    cp /etc/frr.defaults/frr.conf.j2 /etc/frr/frr.conf.j2 2>/dev/null || true
+    cp /etc/frr.defaults/daemons /etc/frr/daemons 2>/dev/null || true
+    cp /etc/frr.defaults/vtysh.conf /etc/frr/vtysh.conf 2>/dev/null || true
+    cp /etc/frr.defaults/version /etc/frr/version 2>/dev/null || true
+
+    # Write version to .initialized
+    echo "${CURRENT_VERSION}" > /etc/frr/.initialized
+    log "Initialized marker updated to version: ${CURRENT_VERSION}"
 fi
 
 # Ensure daemons file exists

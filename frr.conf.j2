@@ -22,6 +22,170 @@ bfd
 exit
 !
 
+! Route maps and prefix lists (defined before BGP config)
+ip prefix-list denyall seq 10 deny 0.0.0.0/0
+!
+ipv6 prefix-list denyall_v6 seq 10 deny ::/0
+!
+{% if route_filters is defined %}
+! Custom prefix lists
+{% if route_filters.prefix_lists is defined %}
+{% if route_filters.prefix_lists.ipv4 is defined %}
+{% for pl_name, pl_config in route_filters.prefix_lists.ipv4.items() %}
+! IPv4 Prefix List: {{ pl_name }}
+{% for rule in pl_config.rules %}
+ip prefix-list {{ pl_name }} seq {{ rule.seq }} {{ rule.action }} {{ rule.prefix }}{% if rule.ge is defined %} ge {{ rule.ge }}{% endif %}{% if rule.le is defined %} le {{ rule.le }}{% endif %}
+
+{% endfor %}
+!
+{% endfor %}
+{% endif %}
+{% if route_filters.prefix_lists.ipv6 is defined %}
+{% for pl_name, pl_config in route_filters.prefix_lists.ipv6.items() %}
+! IPv6 Prefix List: {{ pl_name }}
+{% for rule in pl_config.rules %}
+ipv6 prefix-list {{ pl_name }} seq {{ rule.seq }} {{ rule.action }} {{ rule.prefix }}{% if rule.ge is defined %} ge {{ rule.ge }}{% endif %}{% if rule.le is defined %} le {{ rule.le }}{% endif %}
+
+{% endfor %}
+!
+{% endfor %}
+{% endif %}
+{% endif %}
+! Custom route maps
+{% if route_filters.route_maps is defined %}
+{% for rm_name, rm_config in route_filters.route_maps.items() %}
+! Route Map: {{ rm_name }}
+{% for rule in rm_config.rules %}
+route-map {{ rm_name }} {{ rule.action }} {{ rule.seq }}
+{% if rule.match is defined %}
+{% if rule.match.prefix_list is defined %}
+ match {% if rule.match.address_family == 'ipv6' %}ipv6{% else %}ip{% endif %} address prefix-list {{ rule.match.prefix_list }}
+{% endif %}
+{% if rule.match.as_path is defined %}
+ match as-path {{ rule.match.as_path }}
+{% endif %}
+{% if rule.match.community is defined %}
+ match community {{ rule.match.community }}
+{% endif %}
+{% if rule.match.interface is defined %}
+ match interface {{ rule.match.interface }}
+{% endif %}
+{% endif %}
+{% if rule.set is defined %}
+{% if rule.set.local_preference is defined %}
+ set local-preference {{ rule.set.local_preference }}
+{% endif %}
+{% if rule.set.metric is defined %}
+ set metric {{ rule.set.metric }}
+{% endif %}
+{% if rule.set.weight is defined %}
+ set weight {{ rule.set.weight }}
+{% endif %}
+{% if rule.set.as_path_prepend is defined %}
+ set as-path prepend {{ rule.set.as_path_prepend }}
+{% endif %}
+{% if rule.set.community is defined %}
+ set community {{ rule.set.community }}{% if rule.set.community_additive is defined and rule.set.community_additive %} additive{% endif %}
+
+{% endif %}
+{% if rule.set.src is defined %}
+ set src {{ rule.set.src }}
+{% endif %}
+{% endif %}
+!
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% endif %}
+route-map denymap permit 1
+ match ip address prefix-list denyall
+!
+route-map denymap_v6 permit 1
+ match ipv6 address prefix-list denyall_v6
+!
+route-map SETSRC permit 10
+ set src {{ bgp.upstream.router_id }}
+!
+{% if bgp.upstream.router_id_v6 is defined %}
+route-map SETSRC_V6 permit 10
+ set src {{ bgp.upstream.router_id_v6 }}
+!
+{% endif %}
+route-map loopbacks permit 10
+  match interface lo
+!
+route-map loopbacks permit 20
+  match interface dummy0
+!
+route-map loopbacks permit 30
+  match interface dummy1
+!
+{% if bgp.upstream.peers is defined %}
+! Auto-generated route-maps and prefix-lists for network advertisements
+{% for peer in bgp.upstream.peers %}
+{% set peer_index = loop.index %}
+{% if peer.advertise_networks is defined and peer.advertise_networks %}
+{% if peer.address_family is not defined or peer.address_family == 'ipv4' %}
+! IPv4 prefix-list for peer {{ peer.address }}
+{% for network in peer.advertise_networks %}
+{% if ':' not in network %}
+ip prefix-list NETS_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }}
+{% endif %}
+{% endfor %}
+!
+! IPv4 route-map for peer {{ peer.address }}
+route-map ADVERTISE_{{ peer_index }} permit 10
+ match ip address prefix-list NETS_{{ peer_index }}
+{% if peer.advertise_set is defined %}
+{% if peer.advertise_set.local_preference is defined %}
+ set local-preference {{ peer.advertise_set.local_preference }}
+{% endif %}
+{% if peer.advertise_set.metric is defined %}
+ set metric {{ peer.advertise_set.metric }}
+{% endif %}
+{% if peer.advertise_set.as_path_prepend is defined %}
+ set as-path prepend {{ peer.advertise_set.as_path_prepend }}
+{% endif %}
+{% if peer.advertise_set.community is defined %}
+ set community {{ peer.advertise_set.community }}
+{% endif %}
+{% endif %}
+!
+route-map ADVERTISE_{{ peer_index }} deny 20
+!
+{% elif peer.address_family == 'ipv6' %}
+! IPv6 prefix-list for peer {{ peer.address }}
+{% for network in peer.advertise_networks %}
+{% if ':' in network %}
+ipv6 prefix-list NETS_V6_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }}
+{% endif %}
+{% endfor %}
+!
+! IPv6 route-map for peer {{ peer.address }}
+route-map ADVERTISE_V6_{{ peer_index }} permit 10
+ match ipv6 address prefix-list NETS_V6_{{ peer_index }}
+{% if peer.advertise_set is defined %}
+{% if peer.advertise_set.local_preference is defined %}
+ set local-preference {{ peer.advertise_set.local_preference }}
+{% endif %}
+{% if peer.advertise_set.metric is defined %}
+ set metric {{ peer.advertise_set.metric }}
+{% endif %}
+{% if peer.advertise_set.as_path_prepend is defined %}
+ set as-path prepend {{ peer.advertise_set.as_path_prepend }}
+{% endif %}
+{% if peer.advertise_set.community is defined %}
+ set community {{ peer.advertise_set.community }}
+{% endif %}
+{% endif %}
+!
+route-map ADVERTISE_V6_{{ peer_index }} deny 20
+!
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
 ! BGP Configuration for Cilium peering (VRF)
 router bgp {{ bgp.cilium.local_asn }}{% if bgp.cilium.namespace %} vrf {{ bgp.cilium.namespace }}{% endif %}
 
@@ -33,12 +197,6 @@ router bgp {{ bgp.cilium.local_asn }}{% if bgp.cilium.namespace %} vrf {{ bgp.ci
  neighbor {{ bgp.cilium.peering.ipv4.remote }} remote-as {{ bgp.cilium.remote_asn }}
  neighbor {{ bgp.cilium.peering.ipv4.remote }} description Cilium-BGP-Control-Plane
  neighbor {{ bgp.cilium.peering.ipv4.remote }} passive
-{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
- neighbor {{ bgp.cilium.peering.ipv4.remote }} bfd
-{% if bfd.cilium_peering.profile is defined %}
- neighbor {{ bgp.cilium.peering.ipv4.remote }} bfd profile {{ bfd.cilium_peering.profile }}
-{% endif %}
-{% endif %}
 
  address-family ipv4 unicast
   neighbor {{ bgp.cilium.peering.ipv4.remote }} activate
@@ -49,12 +207,6 @@ router bgp {{ bgp.cilium.local_asn }}{% if bgp.cilium.namespace %} vrf {{ bgp.ci
  neighbor {{ bgp.cilium.peering.ipv6.remote }} remote-as {{ bgp.cilium.remote_asn }}
  neighbor {{ bgp.cilium.peering.ipv6.remote }} description Cilium-BGP-Control-Plane-IPv6
  neighbor {{ bgp.cilium.peering.ipv6.remote }} passive
-{% if bfd.cilium_peering is defined and bfd.cilium_peering.enabled %}
- neighbor {{ bgp.cilium.peering.ipv6.remote }} bfd
-{% if bfd.cilium_peering.profile is defined %}
- neighbor {{ bgp.cilium.peering.ipv6.remote }} bfd profile {{ bfd.cilium_peering.profile }}
-{% endif %}
-{% endif %}
 
  address-family ipv6 unicast
   neighbor {{ bgp.cilium.peering.ipv6.remote }} activate
@@ -163,176 +315,9 @@ router bgp {{ bgp.upstream.local_asn }}
   import vrf {{ bgp.cilium.namespace }}
  exit-address-family
 !
-
-! Route maps and prefix lists
-ip prefix-list denyall seq 10 deny 0.0.0.0/0
-!
-ipv6 prefix-list denyall_v6 seq 10 deny ::/0
-!
-{% if route_filters is defined %}
-! Custom prefix lists
-{% if route_filters.prefix_lists is defined %}
-{% if route_filters.prefix_lists.ipv4 is defined %}
-{% for pl_name, pl_config in route_filters.prefix_lists.ipv4.items() %}
-! IPv4 Prefix List: {{ pl_name }}
-{% for rule in pl_config.rules %}
-ip prefix-list {{ pl_name }} seq {{ rule.seq }} {{ rule.action }} {{ rule.prefix }}{% if rule.ge is defined %} ge {{ rule.ge }}{% endif %}{% if rule.le is defined %} le {{ rule.le }}{% endif %}
-
-{% endfor %}
-!
-{% endfor %}
-{% endif %}
-{% if route_filters.prefix_lists.ipv6 is defined %}
-{% for pl_name, pl_config in route_filters.prefix_lists.ipv6.items() %}
-! IPv6 Prefix List: {{ pl_name }}
-{% for rule in pl_config.rules %}
-ipv6 prefix-list {{ pl_name }} seq {{ rule.seq }} {{ rule.action }} {{ rule.prefix }}{% if rule.ge is defined %} ge {{ rule.ge }}{% endif %}{% if rule.le is defined %} le {{ rule.le }}{% endif %}
-
-{% endfor %}
-!
-{% endfor %}
-{% endif %}
-{% endif %}
-! Custom route maps
-{% if route_filters.route_maps is defined %}
-{% for rm_name, rm_config in route_filters.route_maps.items() %}
-! Route Map: {{ rm_name }}
-{% for rule in rm_config.rules %}
-route-map {{ rm_name }} {{ rule.action }} {{ rule.seq }}
-{% if rule.match is defined %}
-{% if rule.match.prefix_list is defined %}
- match {% if rule.match.address_family == 'ipv6' %}ipv6{% else %}ip{% endif %} address prefix-list {{ rule.match.prefix_list }}
-{% endif %}
-{% if rule.match.as_path is defined %}
- match as-path {{ rule.match.as_path }}
-{% endif %}
-{% if rule.match.community is defined %}
- match community {{ rule.match.community }}
-{% endif %}
-{% if rule.match.interface is defined %}
- match interface {{ rule.match.interface }}
-{% endif %}
-{% endif %}
-{% if rule.set is defined %}
-{% if rule.set.local_preference is defined %}
- set local-preference {{ rule.set.local_preference }}
-{% endif %}
-{% if rule.set.metric is defined %}
- set metric {{ rule.set.metric }}
-{% endif %}
-{% if rule.set.weight is defined %}
- set weight {{ rule.set.weight }}
-{% endif %}
-{% if rule.set.as_path_prepend is defined %}
- set as-path prepend {{ rule.set.as_path_prepend }}
-{% endif %}
-{% if rule.set.community is defined %}
- set community {{ rule.set.community }}{% if rule.set.community_additive is defined and rule.set.community_additive %} additive{% endif %}
-
-{% endif %}
-{% if rule.set.src is defined %}
- set src {{ rule.set.src }}
-{% endif %}
-{% endif %}
-!
-{% endfor %}
-{% endfor %}
-{% endif %}
-{% endif %}
-route-map denymap permit 1
- match ip address prefix-list denyall
-!
-route-map denymap_v6 permit 1
- match ipv6 address prefix-list denyall_v6
-!
-route-map SETSRC permit 10
- set src {{ bgp.upstream.router_id }}
-!
-{% if bgp.upstream.router_id_v6 is defined %}
-route-map SETSRC_V6 permit 10
- set src {{ bgp.upstream.router_id_v6 }}
-!
-{% endif %}
-route-map loopbacks permit 10
-  match interface lo
-!
-route-map loopbacks permit 20
-  match interface dummy0
-!
-route-map loopbacks permit 30
-  match interface dummy1
-!
 ip protocol bgp route-map SETSRC
 {% if bgp.upstream.router_id_v6 is defined %}
 ipv6 protocol bgp route-map SETSRC_V6
-{% endif %}
-!
-{% if bgp.upstream.peers is defined %}
-! Auto-generated route-maps and prefix-lists for network advertisements
-{% for peer in bgp.upstream.peers %}
-{% set peer_index = loop.index %}
-{% if peer.advertise_networks is defined and peer.advertise_networks %}
-{% if peer.address_family is not defined or peer.address_family == 'ipv4' %}
-! IPv4 prefix-list for peer {{ peer.address }}
-{% for network in peer.advertise_networks %}
-{% if ':' not in network %}
-{% set prefix_len = network.split('/')[-1] %}
-ip prefix-list NETS_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 32
-{% endif %}
-{% endfor %}
-!
-! IPv4 route-map for peer {{ peer.address }}
-route-map ADVERTISE_{{ peer_index }} permit 10
- match ip address prefix-list NETS_{{ peer_index }}
-{% if peer.advertise_set is defined %}
-{% if peer.advertise_set.local_preference is defined %}
- set local-preference {{ peer.advertise_set.local_preference }}
-{% endif %}
-{% if peer.advertise_set.metric is defined %}
- set metric {{ peer.advertise_set.metric }}
-{% endif %}
-{% if peer.advertise_set.as_path_prepend is defined %}
- set as-path prepend {{ peer.advertise_set.as_path_prepend }}
-{% endif %}
-{% if peer.advertise_set.community is defined %}
- set community {{ peer.advertise_set.community }}
-{% endif %}
-{% endif %}
-!
-route-map ADVERTISE_{{ peer_index }} deny 20
-!
-{% elif peer.address_family == 'ipv6' %}
-! IPv6 prefix-list for peer {{ peer.address }}
-{% for network in peer.advertise_networks %}
-{% if ':' in network %}
-{% set prefix_len = network.split('/')[-1] %}
-ipv6 prefix-list NETS_V6_{{ peer_index }} seq {{ 10 + loop.index * 10 }} permit {{ network }} ge {{ prefix_len }} le 128
-{% endif %}
-{% endfor %}
-!
-! IPv6 route-map for peer {{ peer.address }}
-route-map ADVERTISE_V6_{{ peer_index }} permit 10
- match ipv6 address prefix-list NETS_V6_{{ peer_index }}
-{% if peer.advertise_set is defined %}
-{% if peer.advertise_set.local_preference is defined %}
- set local-preference {{ peer.advertise_set.local_preference }}
-{% endif %}
-{% if peer.advertise_set.metric is defined %}
- set metric {{ peer.advertise_set.metric }}
-{% endif %}
-{% if peer.advertise_set.as_path_prepend is defined %}
- set as-path prepend {{ peer.advertise_set.as_path_prepend }}
-{% endif %}
-{% if peer.advertise_set.community is defined %}
- set community {{ peer.advertise_set.community }}
-{% endif %}
-{% endif %}
-!
-route-map ADVERTISE_V6_{{ peer_index }} deny 20
-!
-{% endif %}
-{% endif %}
-{% endfor %}
 {% endif %}
 !
 line vty

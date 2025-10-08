@@ -30,11 +30,18 @@ RUN sed -i 's/^bfdd_options=.*/bfdd_options="-A 127.0.0.1"/' /etc/frr/daemons ||
 # Create directory for local config overrides
 RUN mkdir -p /etc/frr/config.d
 
-# Backup original /etc/frr for initialization on first boot
-RUN cp -r /etc/frr /etc/frr.defaults
+# Copy manifest to extract version
+COPY manifest.yaml /tmp/manifest.yaml
 
-# Create a version file for tracking
-RUN echo "FRR Extension v1.2.3 (FRR 10.4.1) - Talos ExtensionServiceConfig Integration" > /etc/frr/version
+# Extract version from manifest and create VERSION file
+RUN apk add --no-cache yq && \
+    VERSION=$(yq '.metadata.version' /tmp/manifest.yaml) && \
+    echo "${VERSION}" > /etc/frr/VERSION && \
+    echo "FRR Extension ${VERSION} (FRR 10.4.1) - Talos ExtensionServiceConfig Integration" > /etc/frr/version && \
+    apk del yq
+
+# Backup original /etc/frr for initialization on first boot (includes VERSION file)
+RUN cp -r /etc/frr /etc/frr.defaults
 
 FROM scratch AS frr
 COPY --from=base / /rootfs/usr/local/lib/containers/frr/

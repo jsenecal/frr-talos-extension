@@ -26,6 +26,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        run: |
+          pip install pyyaml jinja2
+
+      - name: Validate FRR template
+        run: |
+          chmod +x ./validate_template.sh
+          ./validate_template.sh examples/config-bfd.yaml
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
